@@ -75,4 +75,74 @@ replace_exact(
         static std::atomic<u32> reported_faults{0};
 """,
 )
+replace_exact(
+    "src/core/arm/nce/arm_nce.cpp",
+    """            const u32 instruction = instruction_mapped ? guest_memory.Read32(fault_pc) : 0;
+""",
+    """            const u32 instruction = instruction_mapped ? guest_memory.Read32(fault_pc) : 0;
+            // FC26: inspect where the invalid pointer came from; do not
+            // overwrite pointers or skip instructions. All reads are mapped.
+            if (process->GetProgramId() == 0x01004FF021942000ULL) {
+                const u64 guest_sp = m_guest_ctx.sp;
+                if (guest_sp != 0 &&
+                    guest_memory.IsValidVirtualAddressRange(
+                        Common::ProcessAddress{guest_sp}, 64)) {
+                    LOG_ERROR(Core_ARM,
+                              "FC26_DIAG stack sp={:#x} +0={:#x} +8={:#x} +16={:#x} "
+                              "+24={:#x} +32={:#x} +40={:#x} +48={:#x} +56={:#x}",
+                              guest_sp,
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 8}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 16}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 24}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 32}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 40}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 48}),
+                              guest_memory.Read64(Common::ProcessAddress{guest_sp + 56}));
+                }
+                const u64 table_base = m_guest_ctx.cpu_registers[9];
+                const u64 table_index = m_guest_ctx.cpu_registers[8];
+                if (table_base != 0 && table_index < 64 &&
+                    table_base < 0x1000000000000ULL) {
+                    const u64 table_slot = table_base + table_index * sizeof(u64);
+                    if (guest_memory.IsValidVirtualAddressRange(
+                            Common::ProcessAddress{table_slot}, 8)) {
+                        LOG_ERROR(Core_ARM,
+                                  "FC26_DIAG table base={:#x} idx={} slot={:#x} "
+                                  "value={:#x} x27={:#x}",
+                                  table_base, table_index, table_slot,
+                                  guest_memory.Read64(Common::ProcessAddress{table_slot}),
+                                  m_guest_ctx.cpu_registers[27]);
+                    }
+                    if (guest_memory.IsValidVirtualAddressRange(
+                            Common::ProcessAddress{table_base}, 48)) {
+                        LOG_ERROR(Core_ARM,
+                                  "FC26_DIAG table first6={:#x},{:#x},{:#x},"
+                                  "{:#x},{:#x},{:#x}",
+                                  guest_memory.Read64(Common::ProcessAddress{table_base}),
+                                  guest_memory.Read64(Common::ProcessAddress{table_base + 8}),
+                                  guest_memory.Read64(Common::ProcessAddress{table_base + 16}),
+                                  guest_memory.Read64(Common::ProcessAddress{table_base + 24}),
+                                  guest_memory.Read64(Common::ProcessAddress{table_base + 32}),
+                                  guest_memory.Read64(Common::ProcessAddress{table_base + 40}));
+                    }
+                }
+                if (m_guest_ctx.pc >= 64 &&
+                    guest_memory.IsValidVirtualAddressRange(
+                        Common::ProcessAddress{m_guest_ctx.pc - 64}, 64)) {
+                    for (u64 delta = 64; delta >= 16; delta -= 16) {
+                        const u64 at = m_guest_ctx.pc - delta;
+                        LOG_ERROR(Core_ARM,
+                                  "FC26_DIAG asm -{:#x}={:#010x} -{:#x}={:#010x} "
+                                  "-{:#x}={:#010x} -{:#x}={:#010x}",
+                                  delta, guest_memory.Read32(Common::ProcessAddress{at}),
+                                  delta - 4, guest_memory.Read32(Common::ProcessAddress{at + 4}),
+                                  delta - 8, guest_memory.Read32(Common::ProcessAddress{at + 8}),
+                                  delta - 12, guest_memory.Read32(Common::ProcessAddress{at + 12}));
+                    }
+                }
+            }
+""",
+)
+
 print("FC26 safe NCE probe applied: unhandled data faults no longer skipped")
