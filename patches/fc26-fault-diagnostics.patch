@@ -1,0 +1,69 @@
+--- a/src/core/arm/nce/arm_nce.h
++++ b/src/core/arm/nce/arm_nce.h
+@@ -86,6 +86,8 @@
+ 
+     // Core context.
+     GuestContext m_guest_ctx{};
++    // Fault address recorded in the signal handler, logged later outside signal context.
++    std::atomic<u64> m_last_guest_fault_address{};
+     Kernel::KThread* m_running_thread{};
+ 
+     // Stack for signal processing.
+--- a/src/core/arm/nce/arm_nce.cpp
++++ b/src/core/arm/nce/arm_nce.cpp
+@@ -7,6 +7,7 @@
+ #include <cinttypes>
+ #include <memory>
+ 
++#include "common/logging.h"
+ #include "common/signal_chain.h"
+ #include "core/arm/nce/arm_nce.h"
+ #include "core/arm/nce/interpreter_visitor.h"
+@@ -129,6 +130,9 @@
+         return true;
+     }
+ 
++    // Only store primitive data from the signal handler: logging may allocate memory.
++    guest_ctx->parent->m_last_guest_fault_address.store(
++        reinterpret_cast<u64>(info->si_addr), std::memory_order_relaxed);
+     guest_ctx->esr_el1.fetch_or(static_cast<u64>(
+         is_prefetch_abort ? HaltReason::PrefetchAbort : HaltReason::DataAbort));
+ 
+@@ -233,6 +237,23 @@
+         hr = ReturnToRunCodeByTrampoline(thread_params, &m_guest_ctx, it->second);
+     } else {
+         hr = ReturnToRunCodeByExceptionLevelChange(m_thread_id, thread_params);  // Android: Use "process handle SIGUSR2 -n true -p true -s false" (and SIGURG) in LLDB when debugging
++    }
++
++    // After returning to host (not from inside the signal handler), capture the
++    // first guest abort contexts to identify the true faulting instruction.
++    if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
++        static std::atomic<u32> reported_faults{0};
++        if (reported_faults.fetch_add(1, std::memory_order_relaxed) < 16) {
++            LOG_ERROR(Core_ARM,
++                      "FC26_DIAG NCE abort reason={:#x} addr={:#x} pc={:#x} sp={:#x} "
++                      "lr={:#x} fp={:#x} x0={:#x} x1={:#x} x2={:#x} x3={:#x}",
++                      static_cast<u64>(hr),
++                      m_last_guest_fault_address.load(std::memory_order_relaxed),
++                      m_guest_ctx.pc, m_guest_ctx.sp, m_guest_ctx.cpu_registers[30],
++                      m_guest_ctx.cpu_registers[29], m_guest_ctx.cpu_registers[0],
++                      m_guest_ctx.cpu_registers[1], m_guest_ctx.cpu_registers[2],
++                      m_guest_ctx.cpu_registers[3]);
++        }
+     }
+ 
+     // Critical section for thread cleanup
+--- a/src/common/host_memory.cpp
++++ b/src/common/host_memory.cpp
+@@ -767,7 +767,10 @@
+ #if !(defined(__OPENORBIS__) || defined(__managarm__))
+     ASSERT(virtual_offset % PageAlignment == 0);
+     ASSERT(length % PageAlignment == 0);
+-    ASSERT(virtual_offset + length <= virtual_size);
++    ASSERT_MSG(virtual_offset <= virtual_size && length <= virtual_size - virtual_offset,
++               "FC26_DIAG HostMemory::Unmap out of range: offset={:#x} length={:#x} "
++               "virtual_size={:#x} separate_heap={}",
++               virtual_offset, length, virtual_size, separate_heap);
+     if (length == 0 || !virtual_base || !impl) {
+         return;
+     }
