@@ -8,36 +8,36 @@
  
 --- a/src/core/arm/nce/arm_nce.cpp
 +++ b/src/core/arm/nce/arm_nce.cpp
-@@ -121,5 +121,28 @@
+@@ -121,2 +121,28 @@
      const bool is_null_data_abort =
          !is_prefetch_abort && reinterpret_cast<uintptr_t>(info->si_addr) == 0;
-+    // Experimental FC26-only compatibility probe. The guest executes
-+    // LDRB W9, [X20], #1 with X20=null during startup (observed in FC26 logs).
-+    // Treat up to four null byte loads as a terminator, preserving post-increment
-+    // semantics. This does NOT fix the upstream source of the bad pointer.
-+    // Restrict to the game and exact opcode to avoid affecting other titles.
++    // Experimental FC26-only compatibility probe. In FC26 the instructions
++    // LDR X8,[SP,#24]; MOV X20,X8; LDRB W9,[X20],#1 dereference a null pointer.
++    // Point the original LDRB at its *existing, readable, zero-valued* stack
++    // slot. This executes the instruction normally without skipping it or
++    // inventing contents at address zero. Do it at most once per NCE core.
 +    if (is_null_data_abort && host_ctx.regs[20] == 0 &&
++        host_ctx.sp > 0x1000 &&
 +        guest_ctx->parent->m_running_thread->GetOwnerProcess()->GetProgramId() ==
 +            0x01004FF021942000ULL) {
-+        u32 fault_opcode{};
-+        // Data fault: PC points at executable guest code, not the bad data address.
-+        std::memcpy(&fault_opcode, reinterpret_cast<const void*>(host_ctx.pc),
-+                    sizeof(fault_opcode));
-+        if (fault_opcode == 0x38401689) {
++        u32 op{}, prev_op{}, prev_prev_op{};
++        std::memcpy(&op, reinterpret_cast<const void*>(host_ctx.pc), sizeof(op));
++        std::memcpy(&prev_op, reinterpret_cast<const void*>(host_ctx.pc - 4),
++                    sizeof(prev_op));
++        std::memcpy(&prev_prev_op, reinterpret_cast<const void*>(host_ctx.pc - 8),
++                    sizeof(prev_prev_op));
++        if (op == 0x38401689 && prev_op == 0xaa0803f4 &&
++            prev_prev_op == 0xf9400fe8) {
 +            auto& attempts = guest_ctx->parent->m_fc26_null_ldr_workarounds;
-+            if (attempts.load(std::memory_order_relaxed) < 4 &&
-+                attempts.fetch_add(1, std::memory_order_relaxed) < 4) {
-+                host_ctx.regs[9] = 0;
-+                host_ctx.regs[20] = 1;
-+                host_ctx.pc += 4;
++            if (attempts.fetch_add(1, std::memory_order_relaxed) == 0) {
++                host_ctx.regs[20] = host_ctx.sp + 0x18;
 +                return true;
 +            }
 +        }
 +    }
-     if (!is_prefetch_abort && !is_null_data_abort) {
-         host_ctx.pc += 4;
-         return true;
-@@ -258,3 +281,5 @@
++    // Never skip unknown guest data faults. Skipping PC by four caused FC26
++    // to scan through >20 MiB of unmapped memory, producing ~926k log errors.
+@@ -258,3 +284,5 @@
      // first guest abort contexts to identify the true faulting instruction.
      if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
 +        LOG_WARNING(Core_ARM, "FC26_COMPAT null LDRB substitutions on this CPU: {}",
