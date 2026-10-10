@@ -1,0 +1,52 @@
+name: Build Eden FC26 test APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout patch repository
+        uses: actions/checkout@v4
+      - name: Checkout upstream Eden
+        uses: actions/checkout@v4
+        with:
+          repository: eden-emulator/mirror
+          ref: master
+          path: eden
+          submodules: recursive
+      - name: Apply experimental patch
+        run: |
+          cd eden
+          git apply --check ../patches/fc26-null-data-abort.patch
+          git apply ../patches/fc26-null-data-abort.patch
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build ccache pkg-config libssl-dev
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - name: Build APK
+        working-directory: eden
+        run: |
+          chmod +x .ci/android/build.sh src/android/gradlew
+          .ci/android/build.sh --target standard --build-type Release --nightly
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eden-fc26-test
+          path: |
+            eden/artifacts/*.apk
+            eden/artifacts/**/*.apk
+            eden/src/android/app/build/outputs/**/*.apk
+          if-no-files-found: warn
