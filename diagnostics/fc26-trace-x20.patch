@@ -1,0 +1,32 @@
+--- a/src/core/arm/nce/arm_nce.cpp
++++ b/src/core/arm/nce/arm_nce.cpp
+@@ -249,6 +249,29 @@
+             const bool instruction_mapped =
+                 guest_memory.IsValidVirtualAddressRange(fault_pc, sizeof(u32));
+             const u32 instruction = instruction_mapped ? guest_memory.Read32(fault_pc) : 0;
++            const bool prior_mapped = m_guest_ctx.pc >= 16 &&
++                guest_memory.IsValidVirtualAddressRange(
++                    Common::ProcessAddress{m_guest_ctx.pc - 16}, 16);
++            if (prior_mapped) {
++                LOG_ERROR(Core_ARM,
++                          "FC26_DIAG prior opcodes [-16]={:#010x} [-12]={:#010x} "
++                          "[-8]={:#010x} [-4]={:#010x}",
++                          guest_memory.Read32(Common::ProcessAddress{m_guest_ctx.pc - 16}),
++                          guest_memory.Read32(Common::ProcessAddress{m_guest_ctx.pc - 12}),
++                          guest_memory.Read32(Common::ProcessAddress{m_guest_ctx.pc - 8}),
++                          guest_memory.Read32(Common::ProcessAddress{m_guest_ctx.pc - 4}));
++            }
++            LOG_ERROR(Core_ARM,
++                      "FC26_DIAG callee registers x8={:#x} x9={:#x} x10={:#x} "
++                      "x19={:#x} x20={:#x} x21={:#x} x22={:#x} x23={:#x} "
++                      "x24={:#x} x25={:#x} x26={:#x} x27={:#x} x28={:#x}",
++                      m_guest_ctx.cpu_registers[8], m_guest_ctx.cpu_registers[9],
++                      m_guest_ctx.cpu_registers[10], m_guest_ctx.cpu_registers[19],
++                      m_guest_ctx.cpu_registers[20], m_guest_ctx.cpu_registers[21],
++                      m_guest_ctx.cpu_registers[22], m_guest_ctx.cpu_registers[23],
++                      m_guest_ctx.cpu_registers[24], m_guest_ctx.cpu_registers[25],
++                      m_guest_ctx.cpu_registers[26], m_guest_ctx.cpu_registers[27],
++                      m_guest_ctx.cpu_registers[28]);
+             LOG_ERROR(Core_ARM,
+                       "FC26_DIAG NCE abort reason={:#x} addr={:#x} pc={:#x} "
+                       "insn={:#010x} mapped={} sp={:#x} lr={:#x} fp={:#x} "

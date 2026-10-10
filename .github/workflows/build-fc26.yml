@@ -38,6 +38,8 @@ jobs:
           git apply ../patches/fc26-fault-diagnostics.patch
           git apply --check ../diagnostics/fc26-range-and-opcode.patch
           git apply ../diagnostics/fc26-range-and-opcode.patch
+          git apply --check ../diagnostics/fc26-trace-x20.patch
+          git apply ../diagnostics/fc26-trace-x20.patch
       - name: Install build dependencies
         run: |
           sudo apt-get update
