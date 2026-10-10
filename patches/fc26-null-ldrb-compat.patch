@@ -8,7 +8,7 @@
  
 --- a/src/core/arm/nce/arm_nce.cpp
 +++ b/src/core/arm/nce/arm_nce.cpp
-@@ -121,2 +121,28 @@
+@@ -121,6 +121,28 @@
      const bool is_null_data_abort =
          !is_prefetch_abort && reinterpret_cast<uintptr_t>(info->si_addr) == 0;
 +    // Experimental FC26-only compatibility probe. In FC26 the instructions
@@ -37,6 +37,10 @@
 +    }
 +    // Never skip unknown guest data faults. Skipping PC by four caused FC26
 +    // to scan through >20 MiB of unmapped memory, producing ~926k log errors.
+-    if (!is_prefetch_abort && !is_null_data_abort) {
+-        host_ctx.pc += 4;
+-        return true;
+-    }
 @@ -258,3 +284,5 @@
      // first guest abort contexts to identify the true faulting instruction.
      if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
