@@ -6,6 +6,7 @@ on:
     paths:
       - 'patches/**'
       - 'diagnostics/**'
+      - 'scripts/**'
       - '.github/workflows/build-fc26.yml'
 permissions:
   contents: read
@@ -40,8 +41,7 @@ jobs:
           git apply ../diagnostics/fc26-range-and-opcode.patch
           git apply --check ../diagnostics/fc26-trace-x20.patch
           git apply ../diagnostics/fc26-trace-x20.patch
-          git apply --check ../patches/fc26-null-ldrb-compat.patch
-          git apply ../patches/fc26-null-ldrb-compat.patch
+          python3 ../scripts/apply_fc26_safe_probe.py
           git apply --check ../patches/fc26-acc-load-open-context.patch
           git apply ../patches/fc26-acc-load-open-context.patch
           git apply --check ../patches/fc26-npdm-pointer-buffer.patch
@@ -60,7 +60,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-android-ndk28-67bada77f8-${{ hashFiles('patches/**/*.patch', 'diagnostics/**/*.patch') }}
+          key: ccache-${{ runner.os }}-android-ndk28-67bada77f8-${{ hashFiles('patches/**/*.patch', 'diagnostics/**/*.patch', 'scripts/**/*.py') }}
           restore-keys: |
             ccache-${{ runner.os }}-android-ndk28-67bada77f8-
       - uses: android-actions/setup-android@v3
