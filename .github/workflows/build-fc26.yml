@@ -1,6 +1,11 @@
 name: Build Eden FC26 test APK
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/**'
+      - '.github/workflows/build-fc26.yml'
 permissions:
   contents: read
 jobs:
@@ -14,14 +19,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: eden-emulator/mirror
-          ref: master
+          ref: 67bada77f8a43a90da2e94e89b8e7da73c256989
           path: eden
           submodules: recursive
-      - name: Apply experimental patch
+      - name: Apply NCE null-abort and fault-diagnostics patches
         run: |
           cd eden
           git apply --check ../patches/fc26-null-data-abort.patch
           git apply ../patches/fc26-null-data-abort.patch
+          git apply --check ../patches/fc26-fault-diagnostics.patch
+          git apply ../patches/fc26-fault-diagnostics.patch
       - name: Install build dependencies
         run: |
           sudo apt-get update
