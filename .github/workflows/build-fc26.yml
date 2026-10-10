@@ -46,7 +46,7 @@ jobs:
           python3 ../scripts/fc26_cpu_heartbeat.py
           python3 ../scripts/fc26_video_flow.py
           python3 ../scripts/fc26_nifm_offline.py
-          python3 ../scripts/fc26_hybrid_romfs.py
+          python3 ../scripts/fc26_fs_trace.py
           git apply --check ../patches/fc26-acc-load-open-context.patch
           git apply ../patches/fc26-acc-load-open-context.patch
           git apply --check ../patches/fc26-npdm-pointer-buffer.patch
