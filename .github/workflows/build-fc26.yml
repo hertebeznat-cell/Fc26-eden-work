@@ -42,6 +42,8 @@ jobs:
           git apply ../diagnostics/fc26-trace-x20.patch
           git apply --check ../patches/fc26-null-ldrb-compat.patch
           git apply ../patches/fc26-null-ldrb-compat.patch
+          git apply --check ../patches/fc26-acc-load-open-context.patch
+          git apply ../patches/fc26-acc-load-open-context.patch
       - name: Install build dependencies
         run: |
           sudo apt-get update
