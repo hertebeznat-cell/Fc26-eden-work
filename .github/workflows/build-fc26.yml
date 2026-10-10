@@ -47,6 +47,7 @@ jobs:
           python3 ../scripts/fc26_video_flow.py
           python3 ../scripts/fc26_nifm_offline.py
           python3 ../scripts/fc26_fs_trace.py
+          python3 ../scripts/fc26_io_results.py
           git apply --check ../patches/fc26-acc-load-open-context.patch
           git apply ../patches/fc26-acc-load-open-context.patch
           git apply --check ../patches/fc26-npdm-pointer-buffer.patch
