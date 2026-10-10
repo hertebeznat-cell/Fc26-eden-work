@@ -42,6 +42,7 @@ jobs:
           git apply --check ../diagnostics/fc26-trace-x20.patch
           git apply ../diagnostics/fc26-trace-x20.patch
           python3 ../scripts/apply_fc26_safe_probe.py
+          python3 ../scripts/fc26_base_only.py
           git apply --check ../patches/fc26-acc-load-open-context.patch
           git apply ../patches/fc26-acc-load-open-context.patch
           git apply --check ../patches/fc26-npdm-pointer-buffer.patch
