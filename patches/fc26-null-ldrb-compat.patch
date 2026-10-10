@@ -1,0 +1,45 @@
+--- a/src/core/arm/nce/arm_nce.h
++++ b/src/core/arm/nce/arm_nce.h
+@@ -89,6 +89,7 @@
+     // Fault address recorded in the signal handler, logged later outside signal context.
+     std::atomic<u64> m_last_guest_fault_address{};
++    std::atomic<u32> m_fc26_null_ldr_workarounds{};
+     Kernel::KThread* m_running_thread{};
+ 
+--- a/src/core/arm/nce/arm_nce.cpp
++++ b/src/core/arm/nce/arm_nce.cpp
+@@ -121,6 +121,29 @@
+     const bool is_null_data_abort =
+         !is_prefetch_abort && reinterpret_cast<uintptr_t>(info->si_addr) == 0;
++    // Experimental FC26-only compatibility probe. The guest executes
++    // LDRB W9, [X20], #1 with X20=null during startup (observed in FC26 logs).
++    // Treat up to four null byte loads as a terminator, preserving post-increment
++    // semantics. This does NOT fix the upstream source of the bad pointer.
++    // Restrict to the game and exact opcode to avoid affecting other titles.
++    if (is_null_data_abort && host_ctx.regs[20] == 0 &&
++        guest_ctx->parent->m_running_thread->GetOwnerProcess()->GetProgramId() ==
++            0x01004FF021942000ULL) {
++        u32 fault_opcode{};
++        // Data fault: PC points at executable guest code, not the bad data address.
++        std::memcpy(&fault_opcode, reinterpret_cast<const void*>(host_ctx.pc),
++                    sizeof(fault_opcode));
++        if (fault_opcode == 0x38401689) {
++            auto& attempts = guest_ctx->parent->m_fc26_null_ldr_workarounds;
++            if (attempts.load(std::memory_order_relaxed) < 4 &&
++                attempts.fetch_add(1, std::memory_order_relaxed) < 4) {
++                host_ctx.regs[9] = 0;
++                host_ctx.regs[20] = 1;
++                host_ctx.pc += 4;
++                return true;
++            }
++        }
++    }
+     if (!is_prefetch_abort && !is_null_data_abort) {
+         host_ctx.pc += 4;
+         return true;
+@@ -258,6 +281,10 @@
+     // first guest abort contexts to identify the true faulting instruction.
+     if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
++        LOG_WARNING(Core_ARM, "FC26_COMPAT null LDRB substitutions on this CPU: {}",
++                    m_fc26_null_ldr_workarounds.load(std::memory_order_relaxed));
+         static std::atomic<u32> reported_faults{0};
