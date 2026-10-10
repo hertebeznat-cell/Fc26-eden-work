@@ -13,6 +13,12 @@ jobs:
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    env:
+      CCACHE: 'true'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}/eden
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
     steps:
       - name: Checkout patch repository
         uses: actions/checkout@v4
@@ -40,6 +46,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore Gradle caches
+        uses: gradle/actions/setup-gradle@v4
+      - name: Restore Ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ runner.os }}-android-ndk28-67bada77f8-${{ hashFiles('patches/**/*.patch', 'diagnostics/**/*.patch') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-android-ndk28-67bada77f8-
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -52,6 +67,9 @@ jobs:
         run: |
           chmod +x .ci/android/build.sh src/android/gradlew
           .ci/android/build.sh --target standard --build-type Release --nightly
+      - name: Ccache statistics
+        if: always()
+        run: ccache --show-stats
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
