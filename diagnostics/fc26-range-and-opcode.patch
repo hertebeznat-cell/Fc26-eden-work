@@ -1,0 +1,64 @@
+--- a/src/core/arm/nce/arm_nce.cpp
++++ b/src/core/arm/nce/arm_nce.cpp
+@@ -244,15 +244,24 @@
+     if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
+         static std::atomic<u32> reported_faults{0};
+         if (reported_faults.fetch_add(1, std::memory_order_relaxed) < 16) {
++            const auto fault_pc = Common::ProcessAddress{m_guest_ctx.pc};
++            auto& guest_memory = process->GetMemory();
++            const bool instruction_mapped =
++                guest_memory.IsValidVirtualAddressRange(fault_pc, sizeof(u32));
++            const u32 instruction = instruction_mapped ? guest_memory.Read32(fault_pc) : 0;
+             LOG_ERROR(Core_ARM,
+-                      "FC26_DIAG NCE abort reason={:#x} addr={:#x} pc={:#x} sp={:#x} "
+-                      "lr={:#x} fp={:#x} x0={:#x} x1={:#x} x2={:#x} x3={:#x}",
++                      "FC26_DIAG NCE abort reason={:#x} addr={:#x} pc={:#x} "
++                      "insn={:#010x} mapped={} sp={:#x} lr={:#x} fp={:#x} "
++                      "x0={:#x} x1={:#x} x2={:#x} x3={:#x} x4={:#x} x5={:#x} "
++                      "x6={:#x} x7={:#x}",
+                       static_cast<u64>(hr),
+                       m_last_guest_fault_address.load(std::memory_order_relaxed),
+-                      m_guest_ctx.pc, m_guest_ctx.sp, m_guest_ctx.cpu_registers[30],
+-                      m_guest_ctx.cpu_registers[29], m_guest_ctx.cpu_registers[0],
+-                      m_guest_ctx.cpu_registers[1], m_guest_ctx.cpu_registers[2],
+-                      m_guest_ctx.cpu_registers[3]);
++                      m_guest_ctx.pc, instruction, instruction_mapped, m_guest_ctx.sp,
++                      m_guest_ctx.cpu_registers[30], m_guest_ctx.cpu_registers[29],
++                      m_guest_ctx.cpu_registers[0], m_guest_ctx.cpu_registers[1],
++                      m_guest_ctx.cpu_registers[2], m_guest_ctx.cpu_registers[3],
++                      m_guest_ctx.cpu_registers[4], m_guest_ctx.cpu_registers[5],
++                      m_guest_ctx.cpu_registers[6], m_guest_ctx.cpu_registers[7]);
+         }
+     }
+ 
+--- a/src/common/host_memory.cpp
++++ b/src/common/host_memory.cpp
+@@ -767,12 +767,24 @@
+ #if !(defined(__OPENORBIS__) || defined(__managarm__))
+     ASSERT(virtual_offset % PageAlignment == 0);
+     ASSERT(length % PageAlignment == 0);
+-    ASSERT_MSG(virtual_offset <= virtual_size && length <= virtual_size - virtual_offset,
+-               "FC26_DIAG HostMemory::Unmap out of range: offset={:#x} length={:#x} "
+-               "virtual_size={:#x} separate_heap={}",
+-               virtual_offset, length, virtual_size, separate_heap);
+     if (length == 0 || !virtual_base || !impl) {
+         return;
++    }
++    // During teardown a guest may unmap all of its 39-bit address space, while
++    // NCE reserves a smaller host range. Only touch the part that was reserved.
++    // Impl::Unmap further intersects direct-mapped ranges with its own arena.
++    if (virtual_offset >= virtual_size) {
++        LOG_WARNING(HW_Memory,
++                    "FC26_DIAG Unmap ignored outside reservation: offset={:#x} "
++                    "length={:#x} end={:#x}", virtual_offset, length, virtual_size);
++        return;
++    }
++    if (length > virtual_size - virtual_offset) {
++        LOG_WARNING(HW_Memory,
++                    "FC26_DIAG Unmap clipped to reservation: offset={:#x} "
++                    "requested={:#x} available={:#x} separate_heap={}",
++                    virtual_offset, length, virtual_size - virtual_offset, separate_heap);
++        length = virtual_size - virtual_offset;
+     }
+     impl->Unmap(virtual_offset + virtual_base_offset, length);
+ #endif
