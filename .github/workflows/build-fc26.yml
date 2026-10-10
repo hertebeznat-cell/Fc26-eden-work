@@ -44,6 +44,8 @@ jobs:
           git apply ../patches/fc26-null-ldrb-compat.patch
           git apply --check ../patches/fc26-acc-load-open-context.patch
           git apply ../patches/fc26-acc-load-open-context.patch
+          git apply --check ../patches/fc26-npdm-pointer-buffer.patch
+          git apply ../patches/fc26-npdm-pointer-buffer.patch
       - name: Install build dependencies
         run: |
           sudo apt-get update
