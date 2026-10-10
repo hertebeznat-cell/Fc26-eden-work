@@ -1,0 +1,27 @@
+--- a/src/core/arm/nce/arm_nce.cpp
++++ b/src/core/arm/nce/arm_nce.cpp
+@@ -118,15 +118,19 @@
+     // We can't handle the access, so determine why we crashed.
+     const bool is_prefetch_abort = host_ctx.pc == reinterpret_cast<u64>(info->si_addr);
+ 
+-    // For data aborts, skip the instruction and return to guest code.
+-    // This will allow games to continue in many scenarios where they would otherwise crash.
+-    if (!is_prefetch_abort) {
++    // Skipping an instruction that dereferences null can corrupt guest state and
++    // create a cascade of faults. Report it to the kernel as a data abort instead.
++    // Keep the existing fallback for other data faults until their handling is
++    // understood; this change intentionally does not attempt to map null memory.
++    const bool is_null_data_abort =
++        !is_prefetch_abort && reinterpret_cast<uintptr_t>(info->si_addr) == 0;
++    if (!is_prefetch_abort && !is_null_data_abort) {
+         host_ctx.pc += 4;
+         return true;
+     }
+ 
+-    // This is a prefetch abort.
+-    guest_ctx->esr_el1.fetch_or(static_cast<u64>(HaltReason::PrefetchAbort));
++    guest_ctx->esr_el1.fetch_or(static_cast<u64>(
++        is_prefetch_abort ? HaltReason::PrefetchAbort : HaltReason::DataAbort));
+ 
+     // Forcibly mark the context as locked. We are still running.
+     // We may race with SignalInterrupt here:
