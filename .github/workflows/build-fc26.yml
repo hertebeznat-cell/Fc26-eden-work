@@ -25,7 +25,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build ccache pkg-config libssl-dev
+          sudo apt-get install -y ninja-build ccache pkg-config libssl-dev glslang-tools
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
