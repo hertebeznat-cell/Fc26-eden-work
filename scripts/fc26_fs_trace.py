@@ -37,8 +37,12 @@ once(
         }
     }''')
 once(
-    '    LOG_DEBUG(Service_FS, "called. file={}", path->str);',
-    '''    LOG_DEBUG(Service_FS, "called. file={}", path->str);
+    '''Result IFileSystem::GetEntryType(
+    Out<u32> out_type, const InLargeData<FileSys::Sf::Path, BufferAttr_HipcPointer> path) {
+    LOG_DEBUG(Service_FS, "called. file={}", path->str);''',
+    '''Result IFileSystem::GetEntryType(
+    Out<u32> out_type, const InLargeData<FileSys::Sf::Path, BufferAttr_HipcPointer> path) {
+    LOG_DEBUG(Service_FS, "called. file={}", path->str);
     if (system.GetApplicationProcessProgramID() == 0x01004FF021942000ULL) {
         static std::atomic<u32> count{0};
         if (count.fetch_add(1, std::memory_order_relaxed) < 96) {
