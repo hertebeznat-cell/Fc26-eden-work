@@ -1,6 +1,6 @@
 --- a/src/core/arm/nce/arm_nce.h
 +++ b/src/core/arm/nce/arm_nce.h
-@@ -89,6 +89,7 @@
+@@ -89,4 +89,5 @@
      // Fault address recorded in the signal handler, logged later outside signal context.
      std::atomic<u64> m_last_guest_fault_address{};
 +    std::atomic<u32> m_fc26_null_ldr_workarounds{};
@@ -8,7 +8,7 @@
  
 --- a/src/core/arm/nce/arm_nce.cpp
 +++ b/src/core/arm/nce/arm_nce.cpp
-@@ -121,6 +121,29 @@
+@@ -121,5 +121,28 @@
      const bool is_null_data_abort =
          !is_prefetch_abort && reinterpret_cast<uintptr_t>(info->si_addr) == 0;
 +    // Experimental FC26-only compatibility probe. The guest executes
@@ -37,7 +37,7 @@
      if (!is_prefetch_abort && !is_null_data_abort) {
          host_ctx.pc += 4;
          return true;
-@@ -258,6 +281,10 @@
+@@ -258,3 +281,5 @@
      // first guest abort contexts to identify the true faulting instruction.
      if (hr == HaltReason::DataAbort || hr == HaltReason::PrefetchAbort) {
 +        LOG_WARNING(Core_ARM, "FC26_COMPAT null LDRB substitutions on this CPU: {}",
