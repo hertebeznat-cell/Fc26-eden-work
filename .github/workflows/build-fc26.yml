@@ -40,6 +40,8 @@ jobs:
           git apply ../diagnostics/fc26-range-and-opcode.patch
           git apply --check ../diagnostics/fc26-trace-x20.patch
           git apply ../diagnostics/fc26-trace-x20.patch
+          git apply --check ../patches/fc26-null-ldrb-compat.patch
+          git apply ../patches/fc26-null-ldrb-compat.patch
       - name: Install build dependencies
         run: |
           sudo apt-get update
